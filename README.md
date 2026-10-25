@@ -111,3 +111,10 @@ Sources: [OASIS SARIF schema](https://github.com/oasis-tcs/sarif-spec/blob/main/
 [GitHub SARIF support](https://docs.github.com/en/code-security/reference/code-scanning/sarif-files/sarif-support).
 Schema validation is format verification; it does not prove GitHub ingestion or
 live code-scanning display. No upload or production acceptance was performed.
+
+Canonical version assessments are retained explicitly; full component metadata
+and sources are privacy-projected and included in observation identity, so
+conflicts do not deduplicate. Fingerprints use the stable component name, not its
+version/build assessment. Each tool/version SARIF invocation has its own combined
+completion state, including tools whose input reports have no result rows.
+Non-finite numbers, including overflowing JSON exponents, fail before publication.

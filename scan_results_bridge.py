@@ -588,7 +588,7 @@ PROFILES = {
 
 
 def digest(value):
-    return hashlib.sha256(json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode('utf-8')).hexdigest()
+    return hashlib.sha256(json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(',', ':'),allow_nan=False).encode('utf-8')).hexdigest()
 
 
 def bounded_structure(value):
@@ -598,6 +598,8 @@ def bounded_structure(value):
         count += 1
         if count > 250000 or depth > 40:
             raise ContractError('Report structure exceeds limits')
+        if isinstance(item,float) and not math.isfinite(item):
+            raise ContractError('Non-finite numeric metadata')
         if isinstance(item, dict):
             stack.extend((v, depth+1) for v in item.values())
         elif isinstance(item, list):
@@ -675,7 +677,7 @@ def normalize(report, profile, include_paths=False):
         if row.get(prefix+'exploitability') != 'not_tested':
             raise ContractError('Exploitability must remain not_tested')
         rule = row['rule_id'] if canonical else fixed_rule
-        if not isinstance(rule, str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,127}', rule):
+        if not isinstance(rule, str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}', rule):
             raise ContractError('Unsupported rule identifier')
         asset = row.get('asset_id', row.get('input_url', row.get('input_label', row.get('label', row.get('input_id','')))))
         if not isinstance(asset, str):
@@ -687,15 +689,16 @@ def normalize(report, profile, include_paths=False):
             if len(locations) == 1: location = locations[0]
         elif row.get('evidence_type', row.get('copyescape_evidence_type')) in ('lexical_source_candidate','lexical_workflow_candidate'):
             location = source_location(row.get('source_path'), row.get('source_line'))
-        identity = {'tool':tool,'rule':rule,'asset':asset,'location':location, 'instance': [row.get(key) for key in ('package','product','install_path','component')]} 
+        identity = {'tool':tool,'rule':rule,'asset':asset,'location':location, 'instance': [row.get(key) for key in ('package','product','install_path')] + [row['component']['name'] if canonical else row.get('component')]} 
         fingerprint = digest(identity)
-        evidence = {key: row[key] for key in ('evidence','preconditions','mitigation','reachability','threat','reasons','recommendation') if key in row}
+        evidence = {key: row[key] for key in ('component','version_assessment','sources','evidence','preconditions','mitigation','reachability','threat','reasons','recommendation') if key in row}
         if not canonical:
             evidence = {'evidence': {key:value for key,value in row.items() if key not in {'checked_at','generated_at'}}}
         confidence = row.get('confidence', row.get(prefix+'evidence_confidence','unknown'))
         if not isinstance(confidence,str) or confidence not in {'low','medium','high','unknown','insufficient'}: confidence='unknown'
         normalized.append(dict(schema_version='1.0', tool=tool, tool_version=version, rule_id=rule, status=status,
                                exploitability='not_tested', confidence=confidence, complete=report['complete'],
+                               version_assessment=row['version_assessment'] if canonical else 'see_projected_evidence',
                                asset_sha256=digest(asset), fingerprint=fingerprint,
                                location=location if include_paths else None, location_redacted=bool(location and not include_paths),
                                evidence=safe_evidence(evidence), evidence_sha256=digest(evidence),
@@ -704,11 +707,13 @@ def normalize(report, profile, include_paths=False):
     return sorted({digest(row):row for row in normalized}.values(), key=lambda row:(row['tool'],row['rule_id'],row['fingerprint'],digest(row)))
 
 
-def to_sarif(rows, complete):
+def to_sarif(rows, complete, completions=None):
     runs = []
     groups = {}
     for row in rows:
         groups.setdefault((row['tool'],row['tool_version']),[]).append(row)
+    if completions:
+        for key in completions: groups.setdefault(key,[])
     if not groups: groups[('scan-results-bridge',BRIDGE_VERSION)]=[]
     for (name,version), records in sorted(groups.items()):
         ids = sorted({r['rule_id'] for r in records})
@@ -723,7 +728,7 @@ def to_sarif(rows, complete):
             if row['location']:
                 result['locations']=[{'physicalLocation':{'artifactLocation':{'uri':quote(row['location']['path'],safe='/')},'region':{'startLine':row['location']['line']}}}]
             results.append(result)
-        runs.append({'tool':{'driver':{'name':name,'version':version,'rules':rules}},'invocations':[{'executionSuccessful':complete}], 'results':results})
+        runs.append({'tool':{'driver':{'name':name,'version':version,'rules':rules}},'invocations':[{'executionSuccessful':completions.get((name,version),complete) if completions is not None else all(row['complete'] for row in records) if records else complete}], 'results':results})
     return {'version':'2.1.0','$schema':SCHEMA_URI,'runs':runs}
 
 
@@ -748,19 +753,22 @@ def main(argv=None):
                     raise ContractError('Output aliases protected input')
             if args.output.exists() and not args.force: raise ContractError('Output exists')
         rows,complete,total=[],True,0
+        completions={}
         for path in args.input:
             raw=_read_regular_file(path,4*1024**2)
             total+=len(raw)
             if total>16*1024**2: raise ContractError('Combined input byte limit')
             value=json.loads(raw.decode('utf-8-sig'),object_pairs_hook=_unique_object,parse_constant=lambda _: (_ for _ in ()).throw(ContractError('Non-finite JSON')))
             rows.extend(normalize(value,args.input_schema,args.include_relative_paths))
+            identity=(value['tool']['name'],value['tool']['version']) if isinstance(value['tool'],dict) else (value['tool'],value['tool_version'])
+            completions[identity]=completions.get(identity,True) and value['complete']
             complete=complete and value['complete']
             if len(rows)>10000: raise ContractError('Combined result limit')
         rows=sorted({digest(row):row for row in rows}.values(),key=lambda row:(row['tool'],row['rule_id'],row['fingerprint'],digest(row)))
         if args.format=='sarif':
-            rendered=json.dumps(to_sarif(rows,complete),ensure_ascii=False,sort_keys=True,indent=2)+'\n'
+            rendered=json.dumps(to_sarif(rows,complete,completions),ensure_ascii=False,sort_keys=True,indent=2,allow_nan=False)+'\n'
         else:
-            rendered=''.join(json.dumps(row,ensure_ascii=False,sort_keys=True)+'\n' for row in rows)
+            rendered=''.join(json.dumps(row,ensure_ascii=False,sort_keys=True,allow_nan=False)+'\n' for row in rows)
             # Always include an explicit summary, including empty/incomplete conversions.
             rendered+=json.dumps(dict(record_type='summary',schema_version='1.0',complete=complete,result_count=len(rows)),sort_keys=True)+'\n'
         if len(rendered.encode('utf-8'))>32*1024**2: raise ContractError('Output byte limit')

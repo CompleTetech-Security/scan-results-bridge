@@ -105,6 +105,37 @@ class BridgeTests(unittest.TestCase):
                 path.write_text(text,encoding='utf-8');code,out,_=self.cli('--input',str(path));self.assertEqual((2,''),(code,out))
             path.write_bytes(b' '*(4*1024**2+1));self.assertEqual(2,self.cli('--input',str(path))[0])
 
+    def test_canonical_versions_sources_ids_and_fingerprint_updates(self):
+        value=report();first=c.normalize(value,'contract-v1.0')[0]
+        value['results'][0]['component']['version']='24.22.1'
+        value['results'][0]['component']['build_source']='upstream'
+        second=c.normalize(value,'contract-v1.0')[0]
+        self.assertEqual(first['fingerprint'],second['fingerprint'])
+        self.assertNotEqual(first['evidence_sha256'],second['evidence_sha256'])
+        row=copy.deepcopy(value['results'][0]);row['version_assessment']='affected'
+        value['results'].append(row)
+        row=copy.deepcopy(row);row['sources']=['https://example.invalid/other'];value['results'].append(row)
+        self.assertEqual(3,len(c.normalize(value,'contract-v1.0')))
+        value['results'][0]['rule_id']='vendor:rule'
+        self.assertIn('vendor:rule',[r['rule_id'] for r in c.normalize(value,'contract-v1.0')])
+
+    def test_nonfinite_exponent_and_per_tool_empty_completion(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);path=root/'input.json'
+            data=dict(tool='node2shell-check',tool_version='1.0.0',complete=True,results=[dict(node2shell_status='unknown',node2shell_exploitability='not_tested',other=float('inf'))])
+            path.write_text(json.dumps(data).replace('Infinity','1e999'),encoding='utf-8')
+            code,out,_=self.cli('--input',str(path),'--input-schema','node2shell-v1')
+            self.assertEqual((2,''),(code,out))
+            first=report();first['results']=[]
+            second=report();second['tool']['name']='other-check';second['complete']=False
+            second['results']=[]
+            path.write_text(json.dumps(first),encoding='utf-8');other=root/'other.json';other.write_text(json.dumps(second),encoding='utf-8')
+            code,out,_=self.cli('--input',str(path),'--input',str(other))
+            self.assertEqual(2,code)
+            runs={run['tool']['driver']['name']:run for run in json.loads(out)['runs']}
+            self.assertTrue(runs['synthetic-check']['invocations'][0]['executionSuccessful'])
+            self.assertFalse(runs['other-check']['invocations'][0]['executionSuccessful'])
+
     def test_legacy_profiles_fail_closed_and_preserve_unknown(self):
         for profile,(tool,prefix,rule) in c.PROFILES.items():
             value=dict(tool=tool,tool_version='1.0.0',complete=True,results=[{prefix+'status':'unknown',prefix+'exploitability':'not_tested','label':'private'}])
