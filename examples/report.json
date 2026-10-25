@@ -1,0 +1,74 @@
+{
+  "schema_version": "1.0",
+  "tool": {
+    "name": "synthetic-check",
+    "version": "1.0.0"
+  },
+  "rules": {
+    "snapshot_id": "synthetic-1",
+    "verified_at": "2026-10-25",
+    "sha256": null
+  },
+  "complete": true,
+  "limitations": [],
+  "results": [
+    {
+      "asset_id": "private-asset",
+      "component": {
+        "name": "node",
+        "version": "24.22.0",
+        "build_source": "unknown"
+      },
+      "rule_id": "CVE-2026-111497",
+      "status": "unknown",
+      "version_assessment": "unknown",
+      "confidence": "unknown",
+      "evidence": [
+        {
+          "id": "e1",
+          "kind": "source",
+          "state": "candidate",
+          "detail": "token=SECRET https://private.invalid?q=SECRET",
+          "path": "src/worker α.js",
+          "line": 4
+        },
+        {
+          "id": "v1",
+          "kind": "version",
+          "state": "present",
+          "detail": "24.22.0 operator reported"
+        }
+      ],
+      "preconditions": [],
+      "mitigation": {
+        "state": "unknown",
+        "evidence_ids": []
+      },
+      "reachability": {
+        "state": "not_tested",
+        "evidence_ids": [],
+        "authorized": false,
+        "asset_id": "private-asset",
+        "component": "node"
+      },
+      "threat": {
+        "kev": {
+          "state": "unknown",
+          "as_of": null,
+          "source": null
+        },
+        "vendor_exploitation": {
+          "state": "unknown",
+          "as_of": null,
+          "source": null
+        }
+      },
+      "exploitability": "not_tested",
+      "reasons": [],
+      "recommendation": "Inspect C:/private/path token=SECRET",
+      "sources": [
+        "https://nodejs.org/en/blog/vulnerability/october-2026-security-releases"
+      ]
+    }
+  ]
+}

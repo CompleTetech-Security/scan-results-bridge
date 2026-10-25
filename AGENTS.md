@@ -1,16 +1,10 @@
 # Repository instructions
 
 Read README.md, CONTRIBUTING.md, SECURITY.md and LICENSING.md before changes.
-This is optional supporting infrastructure for node2shell-check issue #12.
-Keep the Python entry point independently usable with the standard library.
-Never execute native/package code, run Docker, extract archive members to disk,
-follow links, infer runtime versions from tags/filenames, or expose config Env,
-Cmd, hostnames, credentials or registry data. Preserve no-network defaults,
-whiteout ordering, data/structure/expansion limits, exact digest evidence,
-uncertainty, consumer provenance and protected/atomic publication.
-
-Use synthetic local fixtures only. Run python -m unittest -v, actual CLI help
-and git diff --check. GitHub Copilot must review published changes; address and
-resolve findings and read exact-head hosted CI before merging. Report local
-checks, hosted checks and artifact/runtime observations separately. Preserve
-unrelated work and uncertain inputs. Never shut down or terminate WSL.
+This is optional offline report conversion for node2shell-check issue #14.
+Keep the entry point standalone and stdlib-only. No uploads, network requests,
+credentials or target execution. Preserve uncertainty and not_tested; do not
+fabricate source locations. Keep bounds, privacy projection, stable fingerprints,
+input protection and atomic output. Test synthetic reports only.
+Run python -m unittest -v, CLI help and git diff --check. Require GitHub Copilot
+review and exact-head hosted CI before merge. Never terminate or shut down WSL.
