@@ -689,7 +689,7 @@ def normalize(report, profile, include_paths=False):
             if len(locations) == 1: location = locations[0]
         elif row.get('evidence_type', row.get('copyescape_evidence_type')) in ('lexical_source_candidate','lexical_workflow_candidate'):
             location = source_location(row.get('source_path'), row.get('source_line'))
-        identity = {'tool':tool,'rule':rule,'asset':asset,'location':location, 'instance': [row.get(key) for key in ('package','product','install_path')] + [row['component']['name'] if canonical else row.get('component')]} 
+        identity = {'tool':tool,'rule':rule,'asset':asset,'location':location, 'instance': [row.get(key) for key in ('package','product','install_path')] + [row['component']['name'] if canonical else row.get('component')]}
         fingerprint = digest(identity)
         evidence = {key: row[key] for key in ('component','version_assessment','sources','evidence','preconditions','mitigation','reachability','threat','reasons','recommendation') if key in row}
         if not canonical:
