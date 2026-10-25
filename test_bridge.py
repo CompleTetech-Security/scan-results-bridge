@@ -126,6 +126,9 @@ class BridgeTests(unittest.TestCase):
             path.write_text(json.dumps(data).replace('Infinity','1e999'),encoding='utf-8')
             code,out,_=self.cli('--input',str(path),'--input-schema','node2shell-v1')
             self.assertEqual((2,''),(code,out))
+            data['results'][0].pop('other');data['results'][0]['k'*16385]=0
+            path.write_text(json.dumps(data),encoding='utf-8')
+            self.assertEqual(2,self.cli('--input',str(path),'--input-schema','node2shell-v1')[0])
             first=report();first['results']=[]
             second=report();second['tool']['name']='other-check';second['complete']=False
             second['results']=[]

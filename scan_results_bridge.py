@@ -601,6 +601,8 @@ def bounded_structure(value):
         if isinstance(item,float) and not math.isfinite(item):
             raise ContractError('Non-finite numeric metadata')
         if isinstance(item, dict):
+            if any(len(key)>16384 for key in item):
+                raise ContractError("Report key exceeds string limit")
             stack.extend((v, depth+1) for v in item.values())
         elif isinstance(item, list):
             stack.extend((v, depth+1) for v in item)
