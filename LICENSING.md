@@ -31,3 +31,6 @@ CompleteTech LLC names and logos are not covered by the code license. See
 Contribution terms are described in
 [CONTRIBUTING.md](CONTRIBUTING.md#licensing-of-contributions), including the grant
 that permits CompleteTech LLC to include contributions in both editions.
+
+The unmodified OASIS SARIF schema and accompanying terms under schemas/ retain
+their upstream licensing, separately from the checker code license.
