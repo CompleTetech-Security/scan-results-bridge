@@ -27,6 +27,30 @@ class BridgeTests(unittest.TestCase):
                 code=c.main(list(args))
         return code,out.getvalue(),err.getvalue()
 
+    def test_private_tool_versions_reject_even_empty_reports(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory)/'input.json'
+            for empty in (False,True):
+                value=report();value['tool']['version']='https://private.invalid/?token=SYNTHETIC_SECRET'
+                if empty:value['results']=[]
+                path.write_text(json.dumps(value),encoding='utf-8')
+                for fmt in ('sarif','ndjson'):
+                    code,out,_=self.cli('--input',str(path),'--format',fmt)
+                    self.assertEqual((2,''),(code,out))
+
+    def test_corroborating_source_locations_and_report_limitations(self):
+        value=report(source=True);first=c.normalize(value,'contract-v1.0',True)[0]
+        corroborating=copy.deepcopy(value['results'][0]['evidence'][0]);corroborating['id']='e2'
+        value['results'][0]['evidence'].append(corroborating)
+        second=c.normalize(value,'contract-v1.0',True)[0]
+        self.assertEqual(first['location'],second['location'])
+        self.assertEqual(first['fingerprint'],second['fingerprint'])
+        value['limitations']=['private limitation SECRET']
+        third=c.normalize(value,'contract-v1.0',True)[0]
+        self.assertNotEqual(second['evidence_sha256'],third['evidence_sha256'])
+        self.assertNotIn('SECRET',json.dumps(third))
+        self.assertEqual(2,len(c.deduplicate([second,third])))
+
     def test_source_opt_in_and_inventory_never_fabricates_location(self):
         for source in (True,False):
             value=report(source=source)

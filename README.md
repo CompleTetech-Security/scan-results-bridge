@@ -126,3 +126,5 @@ The raw combined-result limit applies before deduplication. Canonical rule snaps
 metadata participates in projected evidence so different snapshots remain distinct
 observations. Numeric observations, including reported line numbers in projected
 evidence, remain visible; path publication still requires explicit opt-in.
+
+Published tool versions must use the public numeric `major.minor.patch` format, including canonical reports and empty runs. Free-form version labels are rejected before output because they can contain private metadata. Canonical report limitations are included in the privately projected evidence digest. Corroborating source records at the same path and line retain one unambiguous location.

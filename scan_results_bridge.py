@@ -680,6 +680,8 @@ def normalize(report, profile, include_paths=False):
         version = report.get('tool_version', '')
         if not isinstance(version, str) or not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', version):
             raise ContractError('Invalid tool version')
+    if not isinstance(version,str) or not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+',version):
+        raise ContractError('Published tool version must be a public numeric release version')
     normalized = []
     for index, row in enumerate(rows):
         if not isinstance(row, dict):
@@ -698,7 +700,7 @@ def normalize(report, profile, include_paths=False):
         location = None
         if canonical:
             locations = [source_location(e.get('path'), e.get('line')) for e in row['evidence'] if e.get('kind') == 'source']
-            locations = [value for value in locations if value]
+            locations = [dict(path=path,line=line) for path,line in sorted({(value['path'],value['line']) for value in locations if value})]
             if len(locations) == 1: location = locations[0]
         elif row.get('evidence_type', row.get('copyescape_evidence_type')) in ('lexical_source_candidate','lexical_workflow_candidate'):
             location = source_location(row.get('source_path'), row.get('source_line'))
@@ -715,6 +717,7 @@ def normalize(report, profile, include_paths=False):
         evidence = {key: row[key] for key in ('component','version_assessment','sources','evidence','preconditions','mitigation','reachability','threat','reasons','recommendation') if key in row}
         if canonical:
             evidence['rule_snapshot']=report['rules']
+            evidence['limitations']=report.get('limitations',[])
         if not canonical:
             evidence = {'evidence': {key:value for key,value in row.items() if key not in {'checked_at','generated_at'}}}
         confidence = row.get('confidence', row.get(prefix+'evidence_confidence','unknown'))
