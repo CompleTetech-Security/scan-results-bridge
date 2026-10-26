@@ -733,13 +733,26 @@ def normalize(report, profile, include_paths=False):
     return deduplicate(normalized)
 
 
-def to_sarif(rows, complete, completions=None):
+def report_envelope(report, profile):
+    """Project validated report metadata independently of its observation rows."""
+    tool = report['tool']
+    name, version = (tool['name'], tool['version']) if isinstance(tool, dict) else (tool, report['tool_version'])
+    evidence = {key: value for key, value in report.items() if key != 'results'}
+    return dict(schema_version='1.0', tool=name, tool_version=version,
+                input_schema=profile, complete=report['complete'],
+                report_sha256=digest(report), evidence_sha256=digest(evidence),
+                evidence=safe_evidence(evidence))
+
+
+def to_sarif(rows, complete, completions=None, reports=None):
     runs = []
     groups = {}
     for row in rows:
         groups.setdefault((row['tool'],row['tool_version']),[]).append(row)
     if completions:
         for key in completions: groups.setdefault(key,[])
+    for report in reports or []:
+        groups.setdefault((report['tool'], report['tool_version']), [])
     if not groups: groups[('scan-results-bridge',BRIDGE_VERSION)]=[]
     for (name,version), records in sorted(groups.items()):
         ids = sorted({r['rule_id'] for r in records})
@@ -754,7 +767,12 @@ def to_sarif(rows, complete, completions=None):
             if row['location']:
                 result['locations']=[{'physicalLocation':{'artifactLocation':{'uri':quote(row['location']['path'],safe='/')},'region':{'startLine':row['location']['line']}}}]
             results.append(result)
-        runs.append({'tool':{'driver':{'name':name,'version':version,'rules':rules}},'invocations':[{'executionSuccessful':completions.get((name,version),complete) if completions is not None else all(row['complete'] for row in records) if records else complete}], 'results':results})
+        run = {'tool':{'driver':{'name':name,'version':version,'rules':rules}},'invocations':[{'executionSuccessful':completions.get((name,version),complete) if completions is not None else all(row['complete'] for row in records) if records else complete}], 'results':results}
+        if reports is not None:
+            run['properties'] = {'input_reports': sorted(
+                [report for report in reports if (report['tool'], report['tool_version']) == (name, version)],
+                key=digest)}
+        runs.append(run)
     return {'version':'2.1.0','$schema':SCHEMA_URI,'runs':runs}
 
 
@@ -781,12 +799,14 @@ def main(argv=None):
         rows,complete,total=[],True,0
         raw_count=0
         completions={}
+        reports=[]
         for path in args.input:
             raw=_read_regular_file(path,4*1024**2)
             total+=len(raw)
             if total>16*1024**2: raise ContractError('Combined input byte limit')
             value=json.loads(raw.decode('utf-8-sig'),object_pairs_hook=_unique_object,parse_constant=lambda _: (_ for _ in ()).throw(ContractError('Non-finite JSON')))
             normalized=normalize(value,args.input_schema,args.include_relative_paths)
+            reports.append(report_envelope(value, args.input_schema))
             raw_count+=len(value['results'])
             if raw_count>10000:raise ContractError('Combined raw result limit')
             rows.extend(normalized)
@@ -796,11 +816,11 @@ def main(argv=None):
             if len(rows)>10000: raise ContractError('Combined result limit')
         rows=deduplicate(rows)
         if args.format=='sarif':
-            rendered=json.dumps(to_sarif(rows,complete,completions),ensure_ascii=False,sort_keys=True,indent=2,allow_nan=False)+'\n'
+            rendered=json.dumps(to_sarif(rows,complete,completions,reports),ensure_ascii=False,sort_keys=True,indent=2,allow_nan=False)+'\n'
         else:
             rendered=''.join(json.dumps(row,ensure_ascii=False,sort_keys=True,allow_nan=False)+'\n' for row in rows)
             # Always include an explicit summary, including empty/incomplete conversions.
-            rendered+=json.dumps(dict(record_type='summary',schema_version='1.0',complete=complete,result_count=len(rows),observation_count=sum(row['occurrences'] for row in rows)),sort_keys=True)+'\n'
+            rendered+=json.dumps(dict(record_type='summary',schema_version='1.0',complete=complete,result_count=len(rows),observation_count=sum(row['occurrences'] for row in rows),reports=sorted(reports,key=digest)),sort_keys=True)+'\n'
         if len(rendered.encode('utf-8'))>32*1024**2: raise ContractError('Output byte limit')
         if args.output:
             fd,name=tempfile.mkstemp(prefix='.bridge-',dir=args.output.parent)

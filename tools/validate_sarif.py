@@ -14,4 +14,16 @@ for source in (False,True):
         rows=c.normalize(report(status,source),'contract-v1.0',True)
         validator.validate(c.to_sarif(rows,True))
 validator.validate(c.to_sarif([],False))
-print('Five synthetic SARIF variants validated against bundled official OASIS schema.')
+first=report();first['results']=[]
+second=report();second['results']=[];second['complete']=False
+second['rules']['snapshot_id']='synthetic-2'
+second['limitations']=['Synthetic private limitation']
+for reports in ([first], [second], [first,second], [report(source=True),first]):
+    rows=[];completions={};envelopes=[]
+    for value in reports:
+        rows.extend(c.normalize(value,'contract-v1.0',True))
+        identity=(value['tool']['name'],value['tool']['version'])
+        completions[identity]=completions.get(identity,True) and value['complete']
+        envelopes.append(c.report_envelope(value,'contract-v1.0'))
+    validator.validate(c.to_sarif(rows,all(v['complete'] for v in reports),completions,envelopes))
+print('Nine synthetic SARIF variants validated against bundled official OASIS schema.')

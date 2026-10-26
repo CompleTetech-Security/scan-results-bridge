@@ -81,6 +81,19 @@ level, not a CVSS score or an exploitability claim. Original status/confidence a
 complete state remain properties; incomplete SARIF invocations are unsuccessful.
 NDJSON ends with an explicit summary record, including empty results.
 
+Each validated input also contributes a report envelope independently of result
+rows: SARIF stores these under each matching tool/version run's
+`properties.input_reports`; the NDJSON summary stores them in `reports`.
+Each envelope retains public tool/version and profile, explicit completion,
+`report_sha256` for the full canonicalized input, `evidence_sha256` for its
+report-level metadata, and a privacy-projected `evidence` object. Canonical rule
+snapshots and limitations therefore survive empty runs. Input filenames are never
+published. Envelopes are sorted deterministically; repeated identical inputs
+remain repeated, and differing inputs remain attributable by digest. These are
+content identities, not authenticity or deployed-patch attestations. Report
+metadata uses the same structural privacy projection as observation evidence;
+retain the original private report to interpret hashed prose and field names.
+
 Exit 0 means complete conversion with selected policy satisfied. `--fail-on`
 findings, unknown or either returns 1 **after** successful output. Unknown includes
 unsupported_runtime and source_discrepancy. Default none does not fail on findings.
