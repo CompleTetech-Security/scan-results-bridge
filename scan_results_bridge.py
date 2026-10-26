@@ -641,6 +641,17 @@ def source_location(path, line):
     return {'path': path, 'line': line}
 
 
+def deduplicate(rows):
+    unique={}
+    for row in rows:
+        value=dict(row)
+        occurrences=value.pop("occurrences",1)
+        key=digest(value)
+        if key in unique:unique[key]["occurrences"]+=occurrences
+        else:unique[key]={**value,"occurrences":occurrences}
+    return sorted(unique.values(),key=lambda row:(row["tool"],row["rule_id"],row["fingerprint"],digest(row)))
+
+
 def normalize(report, profile, include_paths=False):
     bounded_structure(report)
     if not isinstance(report, dict) or type(report.get('complete')) is not bool:
@@ -691,9 +702,19 @@ def normalize(report, profile, include_paths=False):
             if len(locations) == 1: location = locations[0]
         elif row.get('evidence_type', row.get('copyescape_evidence_type')) in ('lexical_source_candidate','lexical_workflow_candidate'):
             location = source_location(row.get('source_path'), row.get('source_line'))
-        identity = {'tool':tool,'rule':rule,'asset':asset,'location':location, 'instance': [row.get(key) for key in ('package','product','install_path')] + [row['component']['name'] if canonical else row.get('component')]}
+        ordinal=row.get("source_candidate",0)
+        source_instance=row.get("source_instance","")
+        if type(ordinal) is not int or not 0<=ordinal<=10000:
+            raise ContractError("Invalid source candidate ordinal")
+        if not isinstance(source_instance,str) or (source_instance and not re.fullmatch(r"[a-f0-9]{64}",source_instance)):
+            raise ContractError("Invalid input artifact identity")
+        identity = {'tool':tool,'rule':rule,'asset':asset,'location':location,
+                    'instance': [row.get(key) for key in ('package','product','install_path')] + [row['component']['name'] if canonical else row.get('component')],
+                    'source_candidate':ordinal,'source_instance':source_instance}
         fingerprint = digest(identity)
         evidence = {key: row[key] for key in ('component','version_assessment','sources','evidence','preconditions','mitigation','reachability','threat','reasons','recommendation') if key in row}
+        if canonical:
+            evidence['rule_snapshot']=report['rules']
         if not canonical:
             evidence = {'evidence': {key:value for key,value in row.items() if key not in {'checked_at','generated_at'}}}
         confidence = row.get('confidence', row.get(prefix+'evidence_confidence','unknown'))
@@ -706,7 +727,7 @@ def normalize(report, profile, include_paths=False):
                                evidence=safe_evidence(evidence), evidence_sha256=digest(evidence),
                                recommendation='Review the original local report and vendor guidance; metadata does not establish exploitability or safety.'))
     # Deduplicate exact normalized observations only; conflicting statuses/evidence survive.
-    return sorted({digest(row):row for row in normalized}.values(), key=lambda row:(row['tool'],row['rule_id'],row['fingerprint'],digest(row)))
+    return deduplicate(normalized)
 
 
 def to_sarif(rows, complete, completions=None):
@@ -755,24 +776,28 @@ def main(argv=None):
                     raise ContractError('Output aliases protected input')
             if args.output.exists() and not args.force: raise ContractError('Output exists')
         rows,complete,total=[],True,0
+        raw_count=0
         completions={}
         for path in args.input:
             raw=_read_regular_file(path,4*1024**2)
             total+=len(raw)
             if total>16*1024**2: raise ContractError('Combined input byte limit')
             value=json.loads(raw.decode('utf-8-sig'),object_pairs_hook=_unique_object,parse_constant=lambda _: (_ for _ in ()).throw(ContractError('Non-finite JSON')))
-            rows.extend(normalize(value,args.input_schema,args.include_relative_paths))
+            normalized=normalize(value,args.input_schema,args.include_relative_paths)
+            raw_count+=len(value['results'])
+            if raw_count>10000:raise ContractError('Combined raw result limit')
+            rows.extend(normalized)
             identity=(value['tool']['name'],value['tool']['version']) if isinstance(value['tool'],dict) else (value['tool'],value['tool_version'])
             completions[identity]=completions.get(identity,True) and value['complete']
             complete=complete and value['complete']
             if len(rows)>10000: raise ContractError('Combined result limit')
-        rows=sorted({digest(row):row for row in rows}.values(),key=lambda row:(row['tool'],row['rule_id'],row['fingerprint'],digest(row)))
+        rows=deduplicate(rows)
         if args.format=='sarif':
             rendered=json.dumps(to_sarif(rows,complete,completions),ensure_ascii=False,sort_keys=True,indent=2,allow_nan=False)+'\n'
         else:
             rendered=''.join(json.dumps(row,ensure_ascii=False,sort_keys=True,allow_nan=False)+'\n' for row in rows)
             # Always include an explicit summary, including empty/incomplete conversions.
-            rendered+=json.dumps(dict(record_type='summary',schema_version='1.0',complete=complete,result_count=len(rows)),sort_keys=True)+'\n'
+            rendered+=json.dumps(dict(record_type='summary',schema_version='1.0',complete=complete,result_count=len(rows),observation_count=sum(row['occurrences'] for row in rows)),sort_keys=True)+'\n'
         if len(rendered.encode('utf-8'))>32*1024**2: raise ContractError('Output byte limit')
         if args.output:
             fd,name=tempfile.mkstemp(prefix='.bridge-',dir=args.output.parent)

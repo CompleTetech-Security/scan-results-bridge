@@ -118,3 +118,11 @@ conflicts do not deduplicate. Fingerprints use the stable component name, not it
 version/build assessment. Each tool/version SARIF invocation has its own combined
 completion state, including tools whose input reports have no result rows.
 Non-finite numbers, including overflowing JSON exponents, fail before publication.
+
+When reported, same-line source candidate ordinals and hashed input-artifact
+identities disambiguate fingerprints without inventing source columns. Exact
+duplicates retain an `occurrences` count; NDJSON summary includes observation_count.
+The raw combined-result limit applies before deduplication. Canonical rule snapshot
+metadata participates in projected evidence so different snapshots remain distinct
+observations. Numeric observations, including reported line numbers in projected
+evidence, remain visible; path publication still requires explicit opt-in.

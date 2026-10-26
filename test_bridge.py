@@ -53,6 +53,7 @@ class BridgeTests(unittest.TestCase):
     def test_duplicates_order_and_conflicts_are_distinct(self):
         value=report();value['results']*=2
         self.assertEqual(1,len(c.normalize(value,'contract-v1.0')))
+        self.assertEqual(2,c.normalize(value,'contract-v1.0')[0]['occurrences'])
         other=report('potentially_affected')['results'][0]
         value['results'].append(other)
         left=c.normalize(value,'contract-v1.0');value['results'].reverse()
@@ -118,6 +119,18 @@ class BridgeTests(unittest.TestCase):
         self.assertEqual(3,len(c.normalize(value,'contract-v1.0')))
         value['results'][0]['rule_id']='vendor:rule'
         self.assertIn('vendor:rule',[r['rule_id'] for r in c.normalize(value,'contract-v1.0')])
+
+    def test_same_line_candidates_and_distinct_export_artifacts_keep_identity(self):
+        rows=[dict(copyescape_status="unknown",copyescape_exploitability="not_tested",label="src/copy.sh",component="docker-cli",copyescape_evidence_type="lexical_workflow_candidate",source_path="src/copy.sh",source_line=2,source_candidate=n) for n in (1,2)]
+        value=dict(tool="copyescape-check",tool_version="1.1.0",schema_version="1.1",complete=True,results=rows)
+        normalized=c.normalize(value,"copyescape-v1.1")
+        self.assertEqual(2,len({row["fingerprint"] for row in normalized}))
+        for index,row in enumerate(rows):row.update(copyescape_evidence_type="docker_version_export",source_instance=str(index+1)*64,source_candidate=0)
+        self.assertEqual(2,len({row["fingerprint"] for row in c.normalize(value,"copyescape-v1.1")}))
+        value=report();other=copy.deepcopy(value);other['rules']['snapshot_id']='synthetic-2'
+        first=c.normalize(value,'contract-v1.0')[0];second=c.normalize(other,'contract-v1.0')[0]
+        self.assertEqual(first['fingerprint'],second['fingerprint'])
+        self.assertNotEqual(first['evidence_sha256'],second['evidence_sha256'])
 
     def test_nonfinite_exponent_and_per_tool_empty_completion(self):
         with tempfile.TemporaryDirectory() as directory:
