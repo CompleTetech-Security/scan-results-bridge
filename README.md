@@ -1,3 +1,14 @@
+<p align="center">
+  <img src="docs/images/banner.png" alt="scan-results-bridge by CompleteTech LLC" width="100%">
+</p>
+
+<p align="center">
+  <a href="https://github.com/CompleTetech-Security/scan-results-bridge/actions"><img src="https://img.shields.io/github/actions/workflow/status/CompleTetech-Security/scan-results-bridge/tests.yml?label=tests" alt="Tests"></a>
+  <img src="https://img.shields.io/badge/python-3.10%2B-1E3A8A" alt="Python 3.10+">
+  <img src="https://img.shields.io/badge/dependencies-none-067647" alt="No runtime dependencies">
+  <a href="LICENSING.md"><img src="https://img.shields.io/badge/license-AGPL--3.0%20%7C%20commercial-64748B" alt="AGPL-3.0 or commercial license"></a>
+</p>
+
 # scan-results-bridge
 
 Optional offline report conversion for the CompleteTech security checker family.
@@ -19,6 +30,15 @@ The example is synthetic. Output defaults to stdout. Existing files require
 before an atomic file publication. Interruptions exit 130 without publication
 retry; interrupted stdout or an interrupt at the commit boundary may leave an
 incomplete/indeterminate publication. Keep unrelated reports out of commits.
+
+## Offline workflow
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/overview-dark.png">
+  <img src="docs/images/overview-light.png" alt="Scan Results Bridge offline workflow" width="100%">
+</picture>
+
+Supplied local evidence only. The tool does not contact targets or execute the software being assessed.
 
 ## Accepted contracts
 
